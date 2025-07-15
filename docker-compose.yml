@@ -1,0 +1,12 @@
+
+services:
+  app:
+    build: .
+    container_name: chebot_app
+    ports:
+      - "8031:8031"
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    restart: unless-stopped
