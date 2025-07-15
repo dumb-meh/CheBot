@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Revolutionary Chatbot - Che Guevara</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&family=Playfair+Display:wght@700&display=swap');
+        
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: #f5f5f5;
+        }
+        
+        .title-font {
+            font-family: 'Playfair Display', serif;
+        }
+        
+        .che-gradient {
+            background: linear-gradient(135deg, #8B0000 0%, #B22222 50%, #CD5C5C 100%);
+        }
+        
+        .message-enter {
+            animation: enter 0.3s ease-out;
+        }
+        
+        @keyframes enter {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .typing-indicator span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #8B0000;
+            margin: 0 2px;
+            animation: bounce 1.4s infinite ease-in-out;
+        }
+        
+        .typing-indicator span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        
+        .typing-indicator span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        
+        @keyframes bounce {
+            0%, 80%, 100% { 
+                transform: translateY(0);
+            }
+            40% {
+                transform: translateY(-10px);
+            }
+        }
+        
+        .beret {
+            position: relative;
+        }
+        
+        .beret::before {
+            content: "";
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 20px;
+            background-color: #8B0000;
+            border-radius: 50% 50% 0 0;
+        }
+        
+        .beret::after {
+            content: "★";
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: gold;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="che-gradient text-white shadow-lg">
+        <div class="container mx-auto px-4 py-6">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <div class="beret relative">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/CheHigh.jpg/220px-CheHigh.jpg" 
+                             alt="Che Guevara" 
+                             class="w-16 h-16 rounded-full border-4 border-white object-cover">
+                    </div>
+                    <div>
+                        <h1 class="title-font text-2xl md:text-3xl font-bold">Comandante Chat</h1>
+                        <p class="text-sm opacity-90">Revolutionary AI Assistant</p>
+                    </div>
+                </div>
+                <div class="hidden md:block">
+                    <p class="text-sm italic">"Hasta la victoria siempre"</p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Chat Area -->
+    <main class="flex-1 container mx-auto px-4 py-6 max-w-4xl">
+        <div class="bg-white rounded-lg shadow-xl overflow-hidden">
+            <!-- Chat Header -->
+            <div class="bg-gray-800 text-white px-6 py-4 flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                    <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                    <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                </div>
+                <h2 class="font-semibold">Revolutionary Dialog</h2>
+                <div class="text-xs opacity-70">Online</div>
+            </div>
+            
+            <!-- Messages Container -->
+            <div id="chat-container" class="h-96 overflow-y-auto p-4 space-y-4 bg-gray-50">
+                <!-- Initial Bot Message -->
+                <div class="message-enter flex">
+                    <div class="flex-shrink-0 mr-3">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/CheHigh.jpg/220px-CheHigh.jpg" 
+                             alt="Che Bot" 
+                             class="w-10 h-10 rounded-full border-2 border-red-600 object-cover">
+                    </div>
+                    <div class="bg-red-100 rounded-lg p-3 max-w-xs md:max-w-md">
+                        <p class="text-gray-800">¡Saludos, compañero! I am your revolutionary assistant. How can I help you fight the good fight today?</p>
+                        <p class="text-xs text-gray-500 mt-1 italic">11:23 AM</p>
+                    </div>
+                </div>
+                
+                <!-- Typing Indicator (hidden by default) -->
+                <div id="typing-indicator" class="flex items-center hidden">
+                    <div class="flex-shrink-0 mr-3">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/CheHigh.jpg/220px-CheHigh.jpg" 
+                             alt="Che Bot" 
+                             class="w-10 h-10 rounded-full border-2 border-red-600 object-cover">
+                    </div>
+                    <div class="bg-red-100 rounded-lg p-3">
+                        <div class="typing-indicator">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Input Area -->
+            <div class="border-t border-gray-200 p-4 bg-white">
+                <form id="chat-form" class="flex space-x-2">
+                    <input type="text" 
+                           id="user-input" 
+                           placeholder="Type your revolutionary message..." 
+                           class="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
+                    <button type="submit" 
+                            class="che-gradient text-white rounded-full p-2 w-10 h-10 flex items-center justify-center hover:bg-red-800 transition">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </form>
+                <div class="mt-2 flex justify-between items-center text-xs text-gray-500">
+                    <div>
+                        <button class="mr-2 hover:text-red-600"><i class="fas fa-image"></i></button>
+                        <button class="hover:text-red-600"><i class="fas fa-paperclip"></i></button>
+                    </div>
+                    <div>Press Enter to send</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3">
+            <button class="quick-action bg-white rounded-lg shadow p-3 text-center hover:bg-red-50 transition border border-gray-200">
+                <i class="fas fa-book text-red-600 mb-1"></i>
+                <p class="text-sm">Revolution History</p>
+            </button>
+            <button class="quick-action bg-white rounded-lg shadow p-3 text-center hover:bg-red-50 transition border border-gray-200">
+                <i class="fas fa-globe-americas text-red-600 mb-1"></i>
+                <p class="text-sm">Latin America</p>
+            </button>
+            <button class="quick-action bg-white rounded-lg shadow p-3 text-center hover:bg-red-50 transition border border-gray-200">
+                <i class="fas fa-fist-raised text-red-600 mb-1"></i>
+                <p class="text-sm">Social Justice</p>
+            </button>
+            <button class="quick-action bg-white rounded-lg shadow p-3 text-center hover:bg-red-50 transition border border-gray-200">
+                <i class="fas fa-quote-right text-red-600 mb-1"></i>
+                <p class="text-sm">Famous Quotes</p>
+            </button>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white py-6">
+        <div class="container mx-auto px-4 text-center">
+            <p class="text-sm mb-2">"The revolution is not an apple that falls when it is ripe. You have to make it fall."</p>
+            <p class="text-xs opacity-70">© 2023 Revolutionary Chatbot. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const chatForm = document.getElementById('chat-form');
+            const userInput = document.getElementById('user-input');
+            const chatContainer = document.getElementById('chat-container');
+            const typingIndicator = document.getElementById('typing-indicator');
+            
+            // Che Guevara quotes and responses
+            const cheQuotes = [
+                "The revolution is not an apple that falls when it is ripe. You have to make it fall.",
+                "If you tremble with indignation at every injustice then you are a comrade of mine.",
+                "I am not a liberator. Liberators do not exist. The people liberate themselves.",
+                "The true revolutionary is guided by a great feeling of love.",
+                "Silence is argument carried out by other means.",
+                "Let the world change you and you can change the world.",
+                "Many will call me an adventurer, and that I am... only one of a different sort: one who risks his skin to prove his truths."
+            ];
+            
+            const responses = [
+                "The struggle for justice knows no borders, compañero.",
+                "A revolution requires sacrifice and unwavering commitment to the cause.",
+                "Education is the first step toward liberation of the masses.",
+                "Imperialism must be confronted wherever it rears its ugly head.",
+                "The guerrilla fighter needs full help from the people of the area.",
+                "Our every action is a battle cry against imperialism.",
+                "The duty of a revolutionary is to make the revolution."
+            ];
+            
+            // Quick action buttons
+            const quickActions = document.querySelectorAll('.quick-action');
+            quickActions.forEach(button => {
+                button.addEventListener('click', function() {
+                    const actionText = this.querySelector('p').textContent;
+                    userInput.value = `Tell me about ${actionText}`;
+                    userInput.focus();
+                });
+            });
+            
+            // Form submission
+            chatForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const message = userInput.value.trim();
+                if (message === '') return;
+                
+                // Add user message
+                addMessage(message, 'user');
+                userInput.value = '';
+                
+                // Show typing indicator
+                typingIndicator.classList.remove('hidden');
+                
+                // Simulate bot thinking
+                setTimeout(() => {
+                    typingIndicator.classList.add('hidden');
+                    
+                    // Generate bot response
+                    let botResponse;
+                    if (message.toLowerCase().includes('quote')) {
+                        botResponse = getRandomQuote();
+                    } else if (message.toLowerCase().includes('revolution') || message.toLowerCase().includes('fight')) {
+                        botResponse = "The victory of the revolution requires organization and discipline from all comrades.";
+                    } else if (message.toLowerCase().includes('social justice') || message.toLowerCase().includes('justice')) {
+                        botResponse = "Social justice cannot be achieved without dismantling the capitalist system that creates inequality.";
+                    } else if (message.toLowerCase().includes('america') || message.toLowerCase().includes('latin')) {
+                        botResponse = "The future of Latin America must be written by its own people, free from foreign intervention.";
+                    } else {
+                        botResponse = getRandomResponse();
+                    }
+                    
+                    addMessage(botResponse, 'bot');
+                    
+                    // Scroll to bottom
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }, 1500);
+            });
+            
+            // Add message to chat
+            function addMessage(text, sender) {
+                const messageDiv = document.createElement('div');
+                messageDiv.classList.add('message-enter', 'flex');
+                
+                if (sender === 'user') {
+                    messageDiv.classList.add('justify-end');
+                    messageDiv.innerHTML = `
+                        <div class="bg-blue-100 rounded-lg p-3 max-w-xs md:max-w-md">
+                            <p class="text-gray-800">${text}</p>
+                            <p class="text-xs text-gray-500 mt-1 italic text-right">${getCurrentTime()}</p>
+                        </div>
+                        <div class="flex-shrink-0 ml-3">
+                            <img src="https://www.pngkey.com/png/full/301-3012743_anonymous-user-circle-icon-png.png" 
+                                 alt="User" 
+                                 class="w-10 h-10 rounded-full border-2 border-blue-500 object-cover">
+                        </div>
+                    `;
+                } else {
+                    messageDiv.innerHTML = `
+                        <div class="flex-shrink-0 mr-3">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/CheHigh.jpg/220px-CheHigh.jpg" 
+                                 alt="Che Bot" 
+                                 class="w-10 h-10 rounded-full border-2 border-red-600 object-cover">
+                        </div>
+                        <div class="bg-red-100 rounded-lg p-3 max-w-xs md:max-w-md">
+                            <p class="text-gray-800">${text}</p>
+                            <p class="text-xs text-gray-500 mt-1 italic">${getCurrentTime()}</p>
+                        </div>
+                    `;
+                }
+                
+                chatContainer.appendChild(messageDiv);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+            
+            // Helper functions
+            function getRandomQuote() {
+                return cheQuotes[Math.floor(Math.random() * cheQuotes.length)];
+            }
+            
+            function getRandomResponse() {
+                return responses[Math.floor(Math.random() * responses.length)];
+            }
+            
+            function getCurrentTime() {
+                const now = new Date();
+                let hours = now.getHours();
+                let minutes = now.getMinutes();
+                const ampm = hours >= 12 ? 'PM' : 'AM';
+                hours = hours % 12;
+                hours = hours ? hours : 12;
+                minutes = minutes < 10 ? '0' + minutes : minutes;
+                return `${hours}:${minutes} ${ampm}`;
+            }
+            
+            // Allow sending with Enter key
+            userInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    chatForm.dispatchEvent(new Event('submit'));
+                }
+            });
+        });
+    </script>
+</body>
+</html>
