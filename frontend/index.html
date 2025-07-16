@@ -89,6 +89,71 @@
             color: gold;
             font-size: 12px;
         }
+
+        /* New sidebar styles */
+        .sidebar {
+            width: 260px;
+            transition: transform 0.3s ease;
+        }
+        
+        .sidebar-hidden {
+            transform: translateX(-100%);
+        }
+        
+        .sidebar-visible {
+            transform: translateX(0);
+        }
+        
+        .sidebar-toggle {
+            display: none;
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                height: 100%;
+                z-index: 100;
+                box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            }
+            
+            .sidebar-toggle {
+                display: block;
+                position: absolute;
+                top: 20px;
+                right: -50px;
+                background: #8B0000;
+                color: white;
+                width: 40px;
+                height: 40px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                z-index: 101;
+            }
+        }
+        
+        .chat-item {
+            transition: background-color 0.2s;
+        }
+        
+        .chat-item:hover {
+            background-color: rgba(255,255,255,0.1);
+        }
+        
+        .chat-item.active {
+            background-color: rgba(139, 0, 0, 0.7);
+        }
+        
+        .delete-chat {
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        
+        .chat-item:hover .delete-chat {
+            opacity: 1;
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -114,94 +179,132 @@
         </div>
     </header>
 
-    <!-- Main Chat Area -->
-    <main class="flex-1 container mx-auto px-4 py-6 max-w-4xl">
-        <div class="bg-white rounded-lg shadow-xl overflow-hidden">
-            <!-- Chat Header -->
-            <div class="bg-gray-800 text-white px-6 py-4 flex items-center justify-between">
-                <div class="flex items-center space-x-3">
-                    <div class="w-3 h-3 rounded-full bg-red-500"></div>
-                    <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
-                    <div class="w-3 h-3 rounded-full bg-green-500"></div>
-                </div>
-                <h2 class="font-semibold">Revolutionary Dialog</h2>
-                <div class="text-xs opacity-70">Online</div>
+    <!-- Main Content Area -->
+    <div class="flex flex-1">
+        <!-- Sidebar -->
+        <div id="sidebar" class="sidebar bg-gray-800 text-white flex flex-col sidebar-visible">
+            <div class="sidebar-toggle" id="sidebar-toggle">
+                <i class="fas fa-bars"></i>
             </div>
             
-            <!-- Messages Container -->
-            <div id="chat-container" class="h-96 overflow-y-auto p-4 space-y-4 bg-gray-50">
-                <!-- Initial Bot Message -->
-                <div class="message-enter flex">
-                    <div class="flex-shrink-0 mr-3">
-                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/CheHigh.jpg/220px-CheHigh.jpg" 
-                             alt="Che Bot" 
-                             class="w-10 h-10 rounded-full border-2 border-red-600 object-cover">
+            <div class="p-4 border-b border-gray-700">
+                <h2 class="font-semibold text-lg flex justify-between items-center">
+                    <span>Your Chats</span>
+                    <button id="new-chat-sidebar" class="text-xs bg-red-700 hover:bg-red-800 px-2 py-1 rounded">
+                        <i class="fas fa-plus mr-1"></i> New
+                    </button>
+                </h2>
+            </div>
+            
+            <div class="overflow-y-auto flex-1" id="chat-list">
+                <!-- Chat list will be populated dynamically -->
+                <div class="p-4 text-center text-gray-400 italic" id="no-chats-message">
+                    No chats yet. Start a new conversation!
+                </div>
+            </div>
+            
+            <div class="p-4 border-t border-gray-700 text-center text-xs text-gray-400">
+                <p>Comandante Chat v1.0</p>
+            </div>
+        </div>
+
+        <!-- Main Chat Area -->
+        <main class="flex-1 container mx-auto px-4 py-6 max-w-4xl">
+            <div class="bg-white rounded-lg shadow-xl overflow-hidden">
+                <!-- Chat Header with New Chat button -->
+                <div class="bg-gray-800 text-white px-6 py-4 flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <button id="mobile-sidebar-toggle" class="md:hidden mr-2">
+                            <i class="fas fa-bars"></i>
+                        </button>
+                        <div class="flex items-center space-x-2">
+                            <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                        </div>
                     </div>
-                    <div class="bg-red-100 rounded-lg p-3 max-w-xs md:max-w-md">
-                        <p class="text-gray-800">¡Saludos, compañero! I am your revolutionary assistant. How can I help you fight the good fight today?</p>
-                        <p class="text-xs text-gray-500 mt-1 italic">11:23 AM</p>
-                    </div>
+                    <h2 class="font-semibold">Revolutionary Dialog</h2>
+                    <button id="new-chat" class="text-xs bg-red-700 hover:bg-red-800 px-2 py-1 rounded">
+                        <i class="fas fa-plus mr-1"></i> New Chat
+                    </button>
                 </div>
                 
-                <!-- Typing Indicator (hidden by default) -->
-                <div id="typing-indicator" class="flex items-center hidden">
-                    <div class="flex-shrink-0 mr-3">
-                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/CheHigh.jpg/220px-CheHigh.jpg" 
-                             alt="Che Bot" 
-                             class="w-10 h-10 rounded-full border-2 border-red-600 object-cover">
+                <!-- Messages Container -->
+                <div id="chat-container" class="h-96 overflow-y-auto p-4 space-y-4 bg-gray-50">
+                    <!-- Initial Bot Message -->
+                    <div class="message-enter flex">
+                        <div class="flex-shrink-0 mr-3">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/CheHigh.jpg/220px-CheHigh.jpg" 
+                                 alt="Che Bot" 
+                                 class="w-10 h-10 rounded-full border-2 border-red-600 object-cover">
+                        </div>
+                        <div class="bg-red-100 rounded-lg p-3 max-w-xs md:max-w-md">
+                            <p class="text-gray-800">¡Saludos, compañero! I am your revolutionary assistant. How can I help you fight the good fight today?</p>
+                            <p class="text-xs text-gray-500 mt-1 italic">11:23 AM</p>
+                        </div>
                     </div>
-                    <div class="bg-red-100 rounded-lg p-3">
-                        <div class="typing-indicator">
-                            <span></span>
-                            <span></span>
-                            <span></span>
+                    
+                    <!-- Typing Indicator (hidden by default) -->
+                    <div id="typing-indicator" class="flex items-center hidden">
+                        <div class="flex-shrink-0 mr-3">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/CheHigh.jpg/220px-CheHigh.jpg" 
+                                 alt="Che Bot" 
+                                 class="w-10 h-10 rounded-full border-2 border-red-600 object-cover">
+                        </div>
+                        <div class="bg-red-100 rounded-lg p-3">
+                            <div class="typing-indicator">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-            
-            <!-- Input Area -->
-            <div class="border-t border-gray-200 p-4 bg-white">
-                <form id="chat-form" class="flex space-x-2">
-                    <input type="text" 
-                           id="user-input" 
-                           placeholder="Type your revolutionary message..." 
-                           class="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
-                    <button type="submit" 
-                            class="che-gradient text-white rounded-full p-2 w-10 h-10 flex items-center justify-center hover:bg-red-800 transition">
-                        <i class="fas fa-paper-plane"></i>
-                    </button>
-                </form>
-                <div class="mt-2 flex justify-between items-center text-xs text-gray-500">
-                    <div>
-                        <button class="mr-2 hover:text-red-600"><i class="fas fa-image"></i></button>
-                        <button class="hover:text-red-600"><i class="fas fa-paperclip"></i></button>
+                
+                <!-- Input Area -->
+                <div class="border-t border-gray-200 p-4 bg-white">
+                    <form id="chat-form" class="flex space-x-2">
+                        <input type="text" 
+                               id="user-input" 
+                               placeholder="Type your revolutionary message..." 
+                               class="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
+                        <button type="submit" 
+                                class="che-gradient text-white rounded-full p-2 w-10 h-10 flex items-center justify-center hover:bg-red-800 transition">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </form>
+                    <div class="mt-2 flex justify-between items-center text-xs text-gray-500">
+                        <div>
+                            <a href="/static/profile.html" class="mr-2 hover:text-red-600"><i class="fas fa-user"></i> Profile</a>
+                            <button class="mr-2 hover:text-red-600"><i class="fas fa-image"></i></button>
+                            <button class="hover:text-red-600"><i class="fas fa-paperclip"></i></button>
+                        </div>
+                        <div>Press Enter to send</div>
                     </div>
-                    <div>Press Enter to send</div>
                 </div>
             </div>
-        </div>
-        
-        <!-- Quick Actions -->
-        <div class="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3">
-            <button class="quick-action bg-white rounded-lg shadow p-3 text-center hover:bg-red-50 transition border border-gray-200">
-                <i class="fas fa-book text-red-600 mb-1"></i>
-                <p class="text-sm">Revolution History</p>
-            </button>
-            <button class="quick-action bg-white rounded-lg shadow p-3 text-center hover:bg-red-50 transition border border-gray-200">
-                <i class="fas fa-globe-americas text-red-600 mb-1"></i>
-                <p class="text-sm">Latin America</p>
-            </button>
-            <button class="quick-action bg-white rounded-lg shadow p-3 text-center hover:bg-red-50 transition border border-gray-200">
-                <i class="fas fa-fist-raised text-red-600 mb-1"></i>
-                <p class="text-sm">Social Justice</p>
-            </button>
-            <button class="quick-action bg-white rounded-lg shadow p-3 text-center hover:bg-red-50 transition border border-gray-200">
-                <i class="fas fa-quote-right text-red-600 mb-1"></i>
-                <p class="text-sm">Famous Quotes</p>
-            </button>
-        </div>
-    </main>
+            
+            <!-- Quick Actions -->
+            <div class="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3">
+                <button class="quick-action bg-white rounded-lg shadow p-3 text-center hover:bg-red-50 transition border border-gray-200">
+                    <i class="fas fa-book text-red-600 mb-1"></i>
+                    <p class="text-sm">Revolution History</p>
+                </button>
+                <button class="quick-action bg-white rounded-lg shadow p-3 text-center hover:bg-red-50 transition border border-gray-200">
+                    <i class="fas fa-globe-americas text-red-600 mb-1"></i>
+                    <p class="text-sm">Latin America</p>
+                </button>
+                <button class="quick-action bg-white rounded-lg shadow p-3 text-center hover:bg-red-50 transition border border-gray-200">
+                    <i class="fas fa-fist-raised text-red-600 mb-1"></i>
+                    <p class="text-sm">Social Justice</p>
+                </button>
+                <button class="quick-action bg-white rounded-lg shadow p-3 text-center hover:bg-red-50 transition border border-gray-200">
+                    <i class="fas fa-quote-right text-red-600 mb-1"></i>
+                    <p class="text-sm">Famous Quotes</p>
+                </button>
+            </div>
+        </main>
+    </div>
 
     <!-- Footer -->
     <footer class="bg-gray-800 text-white py-6">
@@ -211,146 +314,353 @@
         </div>
     </footer>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const chatForm = document.getElementById('chat-form');
-            const userInput = document.getElementById('user-input');
-            const chatContainer = document.getElementById('chat-container');
-            const typingIndicator = document.getElementById('typing-indicator');
-            
-            // Che Guevara quotes and responses
-            const cheQuotes = [
-                "The revolution is not an apple that falls when it is ripe. You have to make it fall.",
-                "If you tremble with indignation at every injustice then you are a comrade of mine.",
-                "I am not a liberator. Liberators do not exist. The people liberate themselves.",
-                "The true revolutionary is guided by a great feeling of love.",
-                "Silence is argument carried out by other means.",
-                "Let the world change you and you can change the world.",
-                "Many will call me an adventurer, and that I am... only one of a different sort: one who risks his skin to prove his truths."
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const chatForm = document.getElementById('chat-form');
+        const userInput = document.getElementById('user-input');
+        const chatContainer = document.getElementById('chat-container');
+        const typingIndicator = document.getElementById('typing-indicator');
+        const newChatButton = document.getElementById('new-chat');
+        const newChatSidebarButton = document.getElementById('new-chat-sidebar');
+        const chatList = document.getElementById('chat-list');
+        const noChatsMessage = document.getElementById('no-chats-message');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarToggle = document.getElementById('sidebar-toggle');
+        const mobileSidebarToggle = document.getElementById('mobile-sidebar-toggle');
+        
+        // Initialize chat history with initial bot message
+        let currentChatId = null;
+        let chatHistory = [
+            {
+                role: "assistant",
+                content: "¡Saludos, compañero! I am your revolutionary assistant. How can I help you fight the good fight today?"
+            }
+        ];
+
+        // Variable for user profile picture
+        let userProfilePic = "/profile/user.jpg";
+
+        // Generate unique ID for chats
+        function generateChatId() {
+            return 'chat-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        }
+
+        // Toggle sidebar on mobile
+        sidebarToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('sidebar-hidden');
+            sidebar.classList.toggle('sidebar-visible');
+        });
+
+        mobileSidebarToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('sidebar-hidden');
+            sidebar.classList.toggle('sidebar-visible');
+        });
+
+        // New chat button handlers
+        function startNewChat() {
+            currentChatId = generateChatId();
+            chatHistory = [
+                {
+                    role: "assistant",
+                    content: "¡Saludos, compañero! I am your revolutionary assistant. How can I help you fight the good fight today?"
+                }
             ];
             
-            const responses = [
-                "The struggle for justice knows no borders, compañero.",
-                "A revolution requires sacrifice and unwavering commitment to the cause.",
-                "Education is the first step toward liberation of the masses.",
-                "Imperialism must be confronted wherever it rears its ugly head.",
-                "The guerrilla fighter needs full help from the people of the area.",
-                "Our every action is a battle cry against imperialism.",
-                "The duty of a revolutionary is to make the revolution."
-            ];
+            // Clear UI messages except first bot message and typing indicator
+            const children = Array.from(chatContainer.children);
+            for (let i = children.length - 1; i >= 0; i--) {
+                if (!children[i].id && i > 0) {
+                    chatContainer.removeChild(children[i]);
+                }
+            }
             
-            // Quick action buttons
-            const quickActions = document.querySelectorAll('.quick-action');
-            quickActions.forEach(button => {
-                button.addEventListener('click', function() {
-                    const actionText = this.querySelector('p').textContent;
-                    userInput.value = `Tell me about ${actionText}`;
-                    userInput.focus();
+            // Reset to initial bot message if it was removed
+            if (chatContainer.children.length === 1) {
+                const initialMessage = chatHistory[0].content;
+                addMessage(initialMessage, 'bot');
+            }
+            
+            // Add to chat list
+            addChatToList(currentChatId, "New Chat");
+            saveChat(chatHistory, currentChatId);
+        }
+
+        newChatButton.addEventListener('click', startNewChat);
+        newChatSidebarButton.addEventListener('click', startNewChat);
+
+        // Form submission
+        chatForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const message = userInput.value.trim();
+            if (message === '') return;
+            
+            // If this is the first message in a chat, create a new chat
+            if (!currentChatId || chatHistory.length === 1) {
+                currentChatId = generateChatId();
+                // Update the chat title to first message
+                addChatToList(currentChatId, message.substring(0, 20) + (message.length > 20 ? "..." : ""));
+            }
+            
+            addMessage(message, 'user');
+            chatHistory.push({ role: 'user', content: message });
+            
+            userInput.value = '';
+            typingIndicator.classList.remove('hidden');
+            
+            try {
+                // Get AI response
+                const response = await fetch("/chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ messages: chatHistory })
                 });
+                
+                const data = await response.json();
+                const botResponse = data.reply;
+                
+                typingIndicator.classList.add('hidden');
+                addMessage(botResponse, 'bot');
+                chatHistory.push({ role: 'assistant', content: botResponse });
+                
+                // Save chat history
+                await saveChat(chatHistory, currentChatId);
+                
+                // Update chat list with latest message preview
+                updateChatTitle(currentChatId, message.substring(0, 20) + (message.length > 20 ? "..." : ""));
+            } catch (error) {
+                console.error('Error:', error);
+                typingIndicator.classList.add('hidden');
+                addMessage("An error occurred. Please try again.", 'bot');
+            }
+        });
+        
+        // Add message to chat
+        function addMessage(text, sender) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message-enter', 'flex');
+            
+            if (sender === 'user') {
+                messageDiv.classList.add('justify-end');
+                messageDiv.innerHTML = `
+                    <div class="bg-blue-100 rounded-lg p-3 max-w-xs md:max-w-md">
+                        <p class="text-gray-800">${text}</p>
+                        <p class="text-xs text-gray-500 mt-1 italic">${getCurrentTime()}</p>
+                    </div>
+                    <div class="flex-shrink-0 ml-3">
+                        <img src="${userProfilePic}?t=${Date.now()}" 
+                             alt="User" 
+                             class="w-10 h-10 rounded-full border-2 border-blue-500 object-cover">
+                    </div>
+                `;
+            } else {
+                messageDiv.innerHTML = `
+                    <div class="flex-shrink-0 mr-3">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/CheHigh.jpg/220px-CheHigh.jpg" 
+                             alt="Che Bot" 
+                             class="w-10 h-10 rounded-full border-2 border-red-600 object-cover">
+                    </div>
+                    <div class="bg-red-100 rounded-lg p-3 max-w-xs md:max-w-md">
+                        <p class="text-gray-800">${text}</p>
+                        <p class="text-xs text-gray-500 mt-1 italic">${getCurrentTime()}</p>
+                    </div>
+                `;
+            }
+            
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        
+        // Save chat to backend
+        async function saveChat(chatMessages, chatId) {
+            try {
+                await fetch("/save_chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ chat: chatMessages, chatId }),
+                });
+            } catch (error) {
+                console.error('Error saving chat:', error);
+            }
+        }
+        
+        // Get current time in HH:MM AM/PM format
+        function getCurrentTime() {
+            const now = new Date();
+            let hours = now.getHours();
+            const minutes = now.getMinutes().toString().padStart(2, '0');
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12; // Convert 0 to 12
+            return `${hours}:${minutes} ${ampm}`;
+        }
+        
+        // Allow sending with Enter key
+        userInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                chatForm.dispatchEvent(new Event('submit'));
+            }
+        });
+        
+        // Add a chat to the sidebar list
+        function addChatToList(chatId, title) {
+            noChatsMessage.classList.add('hidden');
+            
+            // Check if chat already exists
+            const existingChat = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+            if (existingChat) {
+                existingChat.classList.add('active');
+                return;
+            }
+            
+            const chatElement = document.createElement('div');
+            chatElement.className = 'chat-item active p-3 border-b border-gray-700 cursor-pointer flex justify-between items-center';
+            chatElement.dataset.chatId = chatId;
+            
+            chatElement.innerHTML = `
+                <div class="truncate">${title}</div>
+                <button class="delete-chat text-red-400 hover:text-red-300" data-chat-id="${chatId}">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            `;
+            
+            chatElement.addEventListener('click', () => {
+                // Remove active class from all chats
+                document.querySelectorAll('.chat-item').forEach(item => {
+                    item.classList.remove('active');
+                });
+                
+                // Add active class to clicked chat
+                chatElement.classList.add('active');
+                
+                // Load the chat
+                loadChat(chatId);
             });
             
-            // Form submission
-            chatForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const message = userInput.value.trim();
-                if (message === '') return;
+            // Add delete handler
+            const deleteButton = chatElement.querySelector('.delete-chat');
+            deleteButton.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent triggering the chat load
+                deleteChat(chatId, chatElement);
+            });
+            
+            chatList.prepend(chatElement);
+        }
+        
+        // Update chat title in the list
+        function updateChatTitle(chatId, title) {
+            const chatElement = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+            if (chatElement) {
+                const titleElement = chatElement.querySelector('div');
+                titleElement.textContent = title;
+            }
+        }
+        
+        // Load a chat by ID
+        async function loadChat(chatId) {
+            currentChatId = chatId;
+            
+            try {
+                const response = await fetch(`/load_chat/${chatId}`);
+                const data = await response.json();
                 
-                // Add user message
-                addMessage(message, 'user');
-                userInput.value = '';
-                
-                // Show typing indicator
-                typingIndicator.classList.remove('hidden');
-                
-                // Simulate bot thinking
-                setTimeout(() => {
-                    typingIndicator.classList.add('hidden');
+                if (data.messages) {
+                    chatHistory = data.messages;
                     
-                    // Generate bot response
-                    let botResponse;
-                    if (message.toLowerCase().includes('quote')) {
-                        botResponse = getRandomQuote();
-                    } else if (message.toLowerCase().includes('revolution') || message.toLowerCase().includes('fight')) {
-                        botResponse = "The victory of the revolution requires organization and discipline from all comrades.";
-                    } else if (message.toLowerCase().includes('social justice') || message.toLowerCase().includes('justice')) {
-                        botResponse = "Social justice cannot be achieved without dismantling the capitalist system that creates inequality.";
-                    } else if (message.toLowerCase().includes('america') || message.toLowerCase().includes('latin')) {
-                        botResponse = "The future of Latin America must be written by its own people, free from foreign intervention.";
-                    } else {
-                        botResponse = getRandomResponse();
+                    // Clear chat container
+                    chatContainer.innerHTML = '';
+                    
+                    // Add messages to UI
+                    data.messages.forEach(msg => {
+                        addMessage(msg.content, msg.role === 'user' ? 'user' : 'bot');
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load chat:', error);
+                addMessage("Failed to load chat. Please try again.", 'bot');
+            }
+        }
+        
+        // Delete a chat
+        async function deleteChat(chatId, element) {
+            if (confirm('Are you sure you want to delete this chat?')) {
+                try {
+                    await fetch(`/delete_chat/${chatId}`, { method: 'DELETE' });
+                    
+                    // Remove from UI
+                    element.remove();
+                    
+                    // If this was the current chat, clear the view
+                    if (currentChatId === chatId) {
+                        currentChatId = null;
+                        chatHistory = [];
+                        chatContainer.innerHTML = '';
+                        addChatToList(generateChatId(), "New Chat");
                     }
                     
-                    addMessage(botResponse, 'bot');
+                    // Show no chats message if empty
+                    if (chatList.children.length === 1 && chatList.querySelector('#no-chats-message')) {
+                        noChatsMessage.classList.remove('hidden');
+                    }
+                } catch (error) {
+                    console.error('Failed to delete chat:', error);
+                    alert('Failed to delete chat. Please try again.');
+                }
+            }
+        }
+        
+        // Load user profile picture
+        async function loadUserProfile() {
+            try {
+                const response = await fetch('/user_info');
+                const data = await response.json();
+                
+                if (data.profilePic) {
+                    userProfilePic = `/profile/${data.profilePic}`;
+                    // Add timestamp to force refresh
+                    document.querySelectorAll('.user-avatar').forEach(img => {
+                        img.src = `${userProfilePic}?t=${Date.now()}`;
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load user profile:', error);
+            }
+        }
+        
+        // Initialize on page load
+        async function initialize() {
+            await loadUserProfile();
+            
+            // Load chat list
+            try {
+                const response = await fetch('/chats');
+                const chats = await response.json();
+                
+                if (chats.length > 0) {
+                    noChatsMessage.classList.add('hidden');
                     
-                    // Scroll to bottom
-                    chatContainer.scrollTop = chatContainer.scrollHeight;
-                }, 1500);
-            });
-            
-            // Add message to chat
-            function addMessage(text, sender) {
-                const messageDiv = document.createElement('div');
-                messageDiv.classList.add('message-enter', 'flex');
-                
-                if (sender === 'user') {
-                    messageDiv.classList.add('justify-end');
-                    messageDiv.innerHTML = `
-                        <div class="bg-blue-100 rounded-lg p-3 max-w-xs md:max-w-md">
-                            <p class="text-gray-800">${text}</p>
-                            <p class="text-xs text-gray-500 mt-1 italic text-right">${getCurrentTime()}</p>
-                        </div>
-                        <div class="flex-shrink-0 ml-3">
-                            <img src="https://www.pngkey.com/png/full/301-3012743_anonymous-user-circle-icon-png.png" 
-                                 alt="User" 
-                                 class="w-10 h-10 rounded-full border-2 border-blue-500 object-cover">
-                        </div>
-                    `;
+                    // Add chats to sidebar
+                    chats.forEach(chat => {
+                        addChatToList(chat.id, chat.title);
+                    });
+                    
+                    // Load the first chat
+                    const firstChat = chats[0];
+                    currentChatId = firstChat.id;
+                    loadChat(firstChat.id);
                 } else {
-                    messageDiv.innerHTML = `
-                        <div class="flex-shrink-0 mr-3">
-                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/CheHigh.jpg/220px-CheHigh.jpg" 
-                                 alt="Che Bot" 
-                                 class="w-10 h-10 rounded-full border-2 border-red-600 object-cover">
-                        </div>
-                        <div class="bg-red-100 rounded-lg p-3 max-w-xs md:max-w-md">
-                            <p class="text-gray-800">${text}</p>
-                            <p class="text-xs text-gray-500 mt-1 italic">${getCurrentTime()}</p>
-                        </div>
-                    `;
+                    // Create a new chat if none exist
+                    startNewChat();
                 }
-                
-                chatContainer.appendChild(messageDiv);
-                chatContainer.scrollTop = chatContainer.scrollHeight;
+            } catch (error) {
+                console.error('Failed to load chat list:', error);
+                startNewChat();
             }
-            
-            // Helper functions
-            function getRandomQuote() {
-                return cheQuotes[Math.floor(Math.random() * cheQuotes.length)];
-            }
-            
-            function getRandomResponse() {
-                return responses[Math.floor(Math.random() * responses.length)];
-            }
-            
-            function getCurrentTime() {
-                const now = new Date();
-                let hours = now.getHours();
-                let minutes = now.getMinutes();
-                const ampm = hours >= 12 ? 'PM' : 'AM';
-                hours = hours % 12;
-                hours = hours ? hours : 12;
-                minutes = minutes < 10 ? '0' + minutes : minutes;
-                return `${hours}:${minutes} ${ampm}`;
-            }
-            
-            // Allow sending with Enter key
-            userInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    chatForm.dispatchEvent(new Event('submit'));
-                }
-            });
-        });
-    </script>
+        }
+        
+        initialize();
+    });
+</script>
+
 </body>
 </html>
