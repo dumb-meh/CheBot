@@ -6,6 +6,7 @@ from fastapi.templating import Jinja2Templates
 from dotenv import load_dotenv
 import base64
 import asyncio
+import secrets
 import os, json
 from groq import AsyncGroq
 import redis.asyncio as redis
@@ -22,6 +23,9 @@ CHAT_INDEX_KEY = "chats:index"
 CHAT_KEY_PREFIX = "chat:"
 USER_INFO_KEY = "user:info"
 USER_PROFILE_KEY = "user:profile"
+AUTH_SESSION_KEY_PREFIX = "auth:session:"
+AUTH_COOKIE_NAME = "chebot_auth"
+AUTH_SESSION_TTL_SECONDS = 60 * 60 * 24 * 7
 DEFAULT_PROFILE_SVG = b'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Default profile picture"><rect width="256" height="256" rx="128" fill="#f3f4f6"/><circle cx="128" cy="102" r="46" fill="#9ca3af"/><path d="M48 218c16-42 48-64 80-64s64 22 80 64" fill="#9ca3af"/></svg>'''
 
 prompt=""""
@@ -146,6 +150,72 @@ def get_default_user_info():
     return {"name": "", "profilePic": "/profile-image"}
 
 
+def is_public_path(path: str) -> bool:
+    public_paths = {
+        "/",
+        "/login",
+        "/openapi.json",
+        "/docs",
+        "/docs/oauth2-redirect",
+        "/redoc",
+    }
+    return path in public_paths
+
+
+def is_protected_path(path: str) -> bool:
+    protected_exact_paths = {
+        "/chat",
+        "/chats",
+        "/save_chat",
+        "/load_chat",
+        "/delete_chat",
+        "/user_info",
+        "/profile-image",
+        "/upload_profile",
+        "/save_user_name",
+        "/openapi.json",
+        "/docs",
+        "/docs/oauth2-redirect",
+        "/redoc",
+    }
+
+    if path in protected_exact_paths:
+        return True
+
+    return path.startswith("/static/")
+
+
+async def get_session_token(request: Request):
+    return request.cookies.get(AUTH_COOKIE_NAME)
+
+
+async def is_authenticated(request: Request) -> bool:
+    token = await get_session_token(request)
+    if not token:
+        return False
+
+    return bool(await redis_client.get(f"{AUTH_SESSION_KEY_PREFIX}{token}"))
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+
+    if is_public_path(path):
+        return await call_next(request)
+
+    if not is_protected_path(path):
+        return await call_next(request)
+
+    if await is_authenticated(request):
+        return await call_next(request)
+
+    if request.method in {"GET", "HEAD"} and path.startswith("/static/"):
+        return RedirectResponse("/", status_code=302)
+
+    return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+
+
 async def load_user_info():
     raw_user_info = await redis_client.get(USER_INFO_KEY)
     if not raw_user_info:
@@ -197,8 +267,31 @@ async def login_page(request: Request):
 @app.post("/login", response_class=HTMLResponse)
 async def login(request: Request, user_id: str = Form(...)):
     if user_id == USER_ID:
-        return RedirectResponse("/static/index.html", status_code=302)
+        token = secrets.token_urlsafe(32)
+        await redis_client.setex(f"{AUTH_SESSION_KEY_PREFIX}{token}", AUTH_SESSION_TTL_SECONDS, "1")
+
+        response = RedirectResponse("/static/index.html", status_code=302)
+        response.set_cookie(
+            key=AUTH_COOKIE_NAME,
+            value=token,
+            httponly=True,
+            samesite="lax",
+            max_age=AUTH_SESSION_TTL_SECONDS,
+            path="/",
+        )
+        return response
     return templates.TemplateResponse(request, "login.html", {"error": True})
+
+
+@app.post("/logout")
+async def logout(request: Request):
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if token:
+        await redis_client.delete(f"{AUTH_SESSION_KEY_PREFIX}{token}")
+
+    response = RedirectResponse("/", status_code=302)
+    response.delete_cookie(key=AUTH_COOKIE_NAME, path="/")
+    return response
 
 @app.post("/upload_profile")
 async def upload_profile(file: UploadFile = File(...)):
