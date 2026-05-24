@@ -3,3 +3,6 @@ uvicorn
 groq
 pydantic
 python-multipart
+jinja2
+dotenv
+redis

@@ -1,5 +1,10 @@
 
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: chebot_redis
+    restart: unless-stopped
+
   app:
     build: .
     container_name: chebot_app
@@ -7,6 +12,10 @@ services:
       - "8031:8031"
     env_file:
       - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
     volumes:
       - .:/app
+    depends_on:
+      - redis
     restart: unless-stopped

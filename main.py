@@ -1,23 +1,28 @@
 from fastapi import FastAPI, Request, Form, UploadFile, File
-from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
+from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.templating import Jinja2Templates
 from dotenv import load_dotenv
-import os, json, shutil
-from datetime import datetime
-from pathlib import Path
-from groq import Groq
+import base64
+import asyncio
+import os, json
+from groq import AsyncGroq
+import redis.asyncio as redis
 import time 
 
 load_dotenv()
 USER_ID = os.getenv("USER_ID").strip('"')
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-groq_client = Groq(api_key=GROQ_API_KEY)
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+groq_client = AsyncGroq(api_key=GROQ_API_KEY)
+redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
-CHAT_DIR = Path("chat")
-CHAT_DIR.mkdir(exist_ok=True)
-USER_INFO_FILE = Path("profile") / "user_info.json"
+CHAT_INDEX_KEY = "chats:index"
+CHAT_KEY_PREFIX = "chat:"
+USER_INFO_KEY = "user:info"
+USER_PROFILE_KEY = "user:profile"
+DEFAULT_PROFILE_SVG = b'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Default profile picture"><rect width="256" height="256" rx="128" fill="#f3f4f6"/><circle cx="128" cy="102" r="46" fill="#9ca3af"/><path d="M48 218c16-42 48-64 80-64s64 22 80 64" fill="#9ca3af"/></svg>'''
 
 prompt=""""
         ## Character Overview
@@ -103,46 +108,129 @@ prompt=""""
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.mount("/static", StaticFiles(directory="frontend"), name="static")
-app.mount("/profile", StaticFiles(directory="profile"), name="profile")
 templates = Jinja2Templates(directory="frontend")
-Path("chat").mkdir(exist_ok=True)
-Path("profile").mkdir(exist_ok=True)
+
+
+def chat_key(chat_id: str) -> str:
+    return f"{CHAT_KEY_PREFIX}{chat_id}"
+
+
+def get_chat_title(messages):
+    title = "New Chat"
+    for msg in messages:
+        if msg.get("role") == "user" and msg.get("content"):
+            content = msg["content"]
+            title = content[:20] + "..." if len(content) > 20 else content
+            break
+    return title
+
+
+def normalize_chat_payload(raw_chat, fallback_last_modified):
+    if isinstance(raw_chat, list):
+        messages = raw_chat
+        title = get_chat_title(messages)
+        saved_at = fallback_last_modified
+    else:
+        messages = raw_chat.get("messages", [])
+        title = raw_chat.get("title") or get_chat_title(messages)
+        saved_at = raw_chat.get("saved_at", fallback_last_modified)
+
+    return {
+        "messages": messages,
+        "title": title,
+        "saved_at": saved_at,
+    }
+
+
+def get_default_user_info():
+    return {"name": "", "profilePic": "/profile-image"}
+
+
+async def load_user_info():
+    raw_user_info = await redis_client.get(USER_INFO_KEY)
+    if not raw_user_info:
+        return get_default_user_info()
+
+    try:
+        user_info = json.loads(raw_user_info)
+    except json.JSONDecodeError:
+        return get_default_user_info()
+
+    user_info.setdefault("name", "")
+    user_info.setdefault("profilePic", "/profile-image")
+    return user_info
+
+
+async def save_user_info(user_info):
+    await redis_client.set(USER_INFO_KEY, json.dumps(user_info, ensure_ascii=False))
+
+
+async def wait_for_redis_ready(retries=20, delay_seconds=0.25):
+    for attempt in range(retries):
+        try:
+            await redis_client.ping()
+            return
+        except Exception:
+            if attempt == retries - 1:
+                raise
+            await asyncio.sleep(delay_seconds)
+
+
+@app.get("/profile-image")
+async def profile_image():
+    raw_profile = await redis_client.get(USER_PROFILE_KEY)
+    if not raw_profile:
+        return Response(content=DEFAULT_PROFILE_SVG, media_type="image/svg+xml")
+
+    try:
+        profile_data = json.loads(raw_profile)
+        image_bytes = base64.b64decode(profile_data["data"])
+        media_type = profile_data.get("media_type", "image/png")
+        return Response(content=image_bytes, media_type=media_type)
+    except Exception:
+        return Response(content=DEFAULT_PROFILE_SVG, media_type="image/svg+xml")
 
 @app.get("/", response_class=HTMLResponse)
 async def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request, "error": False})
+    return templates.TemplateResponse(request, "login.html", {"error": False})
 
 @app.post("/login", response_class=HTMLResponse)
 async def login(request: Request, user_id: str = Form(...)):
     if user_id == USER_ID:
         return RedirectResponse("/static/index.html", status_code=302)
-    return templates.TemplateResponse("login.html", {"request": request, "error": True})
+    return templates.TemplateResponse(request, "login.html", {"error": True})
 
 @app.post("/upload_profile")
 async def upload_profile(file: UploadFile = File(...)):
-    # Delete existing profile images (except user_info.json)
-    for f in Path("profile").glob("*"):
-        if f.is_file() and f.name != "user_info.json":
-            f.unlink()
-    
-    # Save new image with timestamped filename
-    filename = f"user_{int(time.time())}{Path(file.filename).suffix}"
-    path = Path("profile") / filename
-    with open(path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    
-    # Update user info with new profile pic
-    user_info = {}
-    if USER_INFO_FILE.exists():
-        with open(USER_INFO_FILE, "r") as f:
-            user_info = json.load(f)
-    
-    user_info["profile_pic"] = filename
-    
-    with open(USER_INFO_FILE, "w") as f:
-        json.dump(user_info, f)
-    
-    return {"filename": filename}
+    image_bytes = await file.read()
+    encoded_image = base64.b64encode(image_bytes).decode("ascii")
+    filename = f"user_{int(time.time())}{os.path.splitext(file.filename)[1]}"
+
+    profile_data = {
+        "filename": filename,
+        "media_type": file.content_type or "image/png",
+        "data": encoded_image,
+        "updated_at": time.time(),
+    }
+    await redis_client.set(USER_PROFILE_KEY, json.dumps(profile_data))
+
+    user_info = await load_user_info()
+    user_info["profilePic"] = "/profile-image"
+    await save_user_info(user_info)
+
+    return {"filename": filename, "profilePic": "/profile-image"}
+
+
+@app.post("/save_user_name")
+async def save_user_name(request: Request):
+    data = await request.json()
+    name = data.get("name", "").strip()
+
+    user_info = await load_user_info()
+    user_info["name"] = name
+    await save_user_info(user_info)
+
+    return {"name": name}
 
 @app.post("/chat")
 async def chat(request: Request):
@@ -154,11 +242,26 @@ async def chat(request: Request):
         messages.insert(0, {"role": "system", "content": prompt})
     
     try:
-        response = groq_client.chat.completions.create(
-            model="llama3-8b-8192", 
-            messages=messages
+        stream = await groq_client.chat.completions.create(
+            model="qwen/qwen3-32b",
+            messages=messages,
+            temperature=0.6,
+            max_completion_tokens=4096,
+            top_p=0.95,
+            reasoning_effort="default",
+            include_reasoning=False,
+            stream=True,
+            stop=None,
         )
-        return {"reply": response.choices[0].message.content}
+
+        async def content_stream():
+            async for chunk in stream:
+                delta = chunk.choices[0].delta
+                content = getattr(delta, "content", None)
+                if content:
+                    yield content
+
+        return StreamingResponse(content_stream(), media_type="text/plain; charset=utf-8")
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
@@ -169,26 +272,27 @@ async def chat(request: Request):
 async def get_chats():
     """Return list of all chats with their titles and IDs"""
     chats = []
-    for file in CHAT_DIR.glob("*.json"):
-        with open(file, "r") as f:
-            try:
-                chat_data = json.load(f)
-                # Extract first user message for title
-                title = "New Chat"
-                for msg in chat_data.get("messages", []):
-                    if msg["role"] == "user":
-                        title = msg["content"][:20] + "..." if len(msg["content"]) > 20 else msg["content"]
-                        break
-                chats.append({
-                    "id": file.stem,
-                    "title": title,
-                    "last_modified": os.path.getmtime(file)
-                })
-            except json.JSONDecodeError:
-                continue
-    # Sort by last modified (newest first)
-    chats.sort(key=lambda x: x["last_modified"], reverse=True)
-    return {"chats": chats}
+    chat_ids = await redis_client.zrevrange(CHAT_INDEX_KEY, 0, -1, withscores=True)
+
+    for chat_id, last_modified in chat_ids:
+        raw_chat = await redis_client.get(chat_key(chat_id))
+        if not raw_chat:
+            continue
+
+        try:
+            chat_data = json.loads(raw_chat)
+        except json.JSONDecodeError:
+            continue
+
+        chat_payload = normalize_chat_payload(chat_data, last_modified)
+
+        chats.append({
+            "id": chat_id,
+            "title": chat_payload["title"],
+            "last_modified": chat_payload["saved_at"],
+        })
+
+    return chats
 
 # Update save_chat function to use chat ID
 @app.post("/save_chat")
@@ -197,83 +301,55 @@ async def save_chat(request: Request):
     chat = data.get("chat")
     chat_id = data.get("chatId")
     
-    if not chat or not chat_id:
+    if not isinstance(chat, list) or not chat_id:
         return JSONResponse({"message": "Invalid data"}, status_code=400)
     
-    # Save chat with ID-based filename
-    filename = f"{chat_id}.json"
-    with open(CHAT_DIR / filename, "w", encoding="utf-8") as f:
-        json.dump(chat, f, indent=2, ensure_ascii=False)
+    saved_at = time.time()
+    title = get_chat_title(chat)
+    payload = {
+        "messages": chat,
+        "saved_at": saved_at,
+        "title": title,
+    }
+
+    await redis_client.set(chat_key(chat_id), json.dumps(payload, ensure_ascii=False))
+    await redis_client.zadd(CHAT_INDEX_KEY, {chat_id: saved_at})
     
-    return {"message": "Chat saved", "filename": filename}
+    return {"message": "Chat saved", "chatId": chat_id}
 
 # New endpoint to load a specific chat
 @app.get("/load_chat/{chat_id}")
 async def load_chat(chat_id: str):
     """Load a specific chat by its ID"""
-    chat_file = CHAT_DIR / f"{chat_id}.json"
-    if not chat_file.exists():
+    raw_chat = await redis_client.get(chat_key(chat_id))
+    if not raw_chat:
         return JSONResponse({"error": "Chat not found"}, status_code=404)
     
-    with open(chat_file, "r") as f:
-        chat_data = json.load(f)
-    
-    return {"messages": chat_data}
+    try:
+        chat_data = json.loads(raw_chat)
+    except json.JSONDecodeError:
+        return JSONResponse({"error": "Chat not found"}, status_code=404)
+
+    normalized_chat = normalize_chat_payload(chat_data, time.time())
+    return {"messages": normalized_chat["messages"]}
 
 # New endpoint to delete a chat
 @app.delete("/delete_chat/{chat_id}")
 async def delete_chat(chat_id: str):
     """Delete a specific chat by its ID"""
-    chat_file = CHAT_DIR / f"{chat_id}.json"
-    if chat_file.exists():
-        chat_file.unlink()
+    deleted = await redis_client.delete(chat_key(chat_id))
+    await redis_client.zrem(CHAT_INDEX_KEY, chat_id)
+    if deleted:
         return {"message": "Chat deleted"}
     return JSONResponse({"error": "Chat not found"}, status_code=404)
 
-# Update upload_profile to maintain single image
-@app.post("/upload_profile")
-async def upload_profile(file: UploadFile = File(...)):
-    # Delete existing profile images
-    for f in Path("profile").glob("*"):
-        if f.is_file() and f.name != "user_info.json":
-            f.unlink()
-    
-    # Save new image with timestamped filename
-    filename = f"user_{int(time.time())}{Path(file.filename).suffix}"
-    path = Path("profile") / filename
-    with open(path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    
-    # Update user info with new profile pic
-    user_info = {}
-    if USER_INFO_FILE.exists():
-        with open(USER_INFO_FILE, "r") as f:
-            user_info = json.load(f)
-    
-    user_info["profile_pic"] = filename
-    
-    with open(USER_INFO_FILE, "w") as f:
-        json.dump(user_info, f)
-    
-    return {"filename": filename}
-
-# Update user_info to include profile picture
 @app.get("/user_info")
 async def get_user_info():
-    if USER_INFO_FILE.exists():
-        with open(USER_INFO_FILE, "r") as f:
-            return json.load(f)
-    return {"name": "", "profile_pic": ""}
+    return await load_user_info()
 
 @ app.on_event("startup")
 async def startup_event():
-    # Ensure user_info.json exists
-    if not USER_INFO_FILE.exists():
-        with open(USER_INFO_FILE, "w") as f:
-            json.dump({"name": "", "profile_pic": ""}, f)
-    
-    # Ensure chat directory exists
-    CHAT_DIR.mkdir(exist_ok=True)
-    
-    # Ensure profile directory exists
-    Path("profile").mkdir(exist_ok=True)
+    await wait_for_redis_ready()
+
+    if not await redis_client.get(USER_INFO_KEY):
+        await save_user_info(get_default_user_info())

@@ -19,7 +19,7 @@
         
         <!-- Profile Picture -->
         <div class="flex flex-col items-center mb-6">
-            <img id="profile-image" src="/profile/user.jpg" 
+              <img id="profile-image" src="/profile-image" 
                  class="profile-pic rounded-full object-cover mb-4">
             <form id="upload-form" class="flex flex-col items-center">
                 <input type="file" id="profile-upload" accept="image/*" class="mb-2">
@@ -61,6 +61,9 @@
                 if (data.name) {
                     document.getElementById('user-name').value = data.name;
                 }
+                if (data.profilePic) {
+                    document.getElementById('profile-image').src = `${data.profilePic}?t=${Date.now()}`;
+                }
             });
         
         // Handle profile upload
@@ -79,7 +82,7 @@
                 });
                 
                 const data = await res.json();
-                document.getElementById('profile-image').src = `/profile/${data.filename}?t=${Date.now()}`;
+                document.getElementById('profile-image').src = `${data.profilePic}?t=${Date.now()}`;
                 fileInput.value = '';
             } catch (error) {
                 console.error('Upload failed:', error);

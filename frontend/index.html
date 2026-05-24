@@ -6,6 +6,8 @@
     <title>Revolutionary Chatbot - Che Guevara</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&family=Playfair+Display:wght@700&display=swap');
         
@@ -163,7 +165,7 @@
             <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-4">
                     <div class="beret relative">
-                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/CheHigh.jpg/220px-CheHigh.jpg" 
+                        <img src="/static/bot_image.jpg" 
                              alt="Che Guevara" 
                              class="w-16 h-16 rounded-full border-4 border-white object-cover">
                     </div>
@@ -234,7 +236,7 @@
                     <!-- Initial Bot Message -->
                     <div class="message-enter flex">
                         <div class="flex-shrink-0 mr-3">
-                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/CheHigh.jpg/220px-CheHigh.jpg" 
+                            <img src="/static/bot_image.jpg" 
                                  alt="Che Bot" 
                                  class="w-10 h-10 rounded-full border-2 border-red-600 object-cover">
                         </div>
@@ -247,7 +249,7 @@
                     <!-- Typing Indicator (hidden by default) -->
                     <div id="typing-indicator" class="flex items-center hidden">
                         <div class="flex-shrink-0 mr-3">
-                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/CheHigh.jpg/220px-CheHigh.jpg" 
+                            <img src="/static/bot_image.jpg" 
                                  alt="Che Bot" 
                                  class="w-10 h-10 rounded-full border-2 border-red-600 object-cover">
                         </div>
@@ -276,8 +278,6 @@
                     <div class="mt-2 flex justify-between items-center text-xs text-gray-500">
                         <div>
                             <a href="/static/profile.html" class="mr-2 hover:text-red-600"><i class="fas fa-user"></i> Profile</a>
-                            <button class="mr-2 hover:text-red-600"><i class="fas fa-image"></i></button>
-                            <button class="hover:text-red-600"><i class="fas fa-paperclip"></i></button>
                         </div>
                         <div>Press Enter to send</div>
                     </div>
@@ -310,7 +310,7 @@
     <footer class="bg-gray-800 text-white py-6">
         <div class="container mx-auto px-4 text-center">
             <p class="text-sm mb-2">"The revolution is not an apple that falls when it is ripe. You have to make it fall."</p>
-            <p class="text-xs opacity-70">© 2023 Revolutionary Chatbot. All rights reserved.</p>
+            <p class="text-xs opacity-70">© 2025 Revolutionary Chatbot. All rights reserved.</p>
         </div>
     </footer>
 
@@ -327,18 +327,24 @@
         const sidebar = document.getElementById('sidebar');
         const sidebarToggle = document.getElementById('sidebar-toggle');
         const mobileSidebarToggle = document.getElementById('mobile-sidebar-toggle');
+        const submitButton = chatForm.querySelector('button[type="submit"]');
+        const INITIAL_BOT_MESSAGE = "¡Saludos, compañero! I am your revolutionary assistant. How can I help you fight the good fight today?";
+        let isSending = false;
+        let isLoadingChat = false;
+        let activeSendToken = 0;
+        let activeLoadToken = 0;
         
         // Initialize chat history with initial bot message
         let currentChatId = null;
         let chatHistory = [
             {
                 role: "assistant",
-                content: "¡Saludos, compañero! I am your revolutionary assistant. How can I help you fight the good fight today?"
+                content: INITIAL_BOT_MESSAGE
             }
         ];
 
         // Variable for user profile picture
-        let userProfilePic = "/profile/user.jpg";
+        let userProfilePic = "/profile-image";
 
         // Generate unique ID for chats
         function generateChatId() {
@@ -358,31 +364,27 @@
 
         // New chat button handlers
         function startNewChat() {
+            activeSendToken += 1;
+            activeLoadToken += 1;
+            isSending = false;
+            isLoadingChat = false;
+            submitButton.disabled = false;
+            userInput.disabled = false;
+            setTypingIndicator(false);
+
             currentChatId = generateChatId();
             chatHistory = [
                 {
                     role: "assistant",
-                    content: "¡Saludos, compañero! I am your revolutionary assistant. How can I help you fight the good fight today?"
+                    content: INITIAL_BOT_MESSAGE
                 }
             ];
-            
-            // Clear UI messages except first bot message and typing indicator
-            const children = Array.from(chatContainer.children);
-            for (let i = children.length - 1; i >= 0; i--) {
-                if (!children[i].id && i > 0) {
-                    chatContainer.removeChild(children[i]);
-                }
-            }
-            
-            // Reset to initial bot message if it was removed
-            if (chatContainer.children.length === 1) {
-                const initialMessage = chatHistory[0].content;
-                addMessage(initialMessage, 'bot');
-            }
+
+            renderChatMessages(chatHistory);
             
             // Add to chat list
             addChatToList(currentChatId, "New Chat");
-            saveChat(chatHistory, currentChatId);
+            void saveChat(chatHistory, currentChatId);
         }
 
         newChatButton.addEventListener('click', startNewChat);
@@ -391,36 +393,97 @@
         // Form submission
         chatForm.addEventListener('submit', async function(e) {
             e.preventDefault();
+            e.stopPropagation();
+
+            if (isSending || isLoadingChat) {
+                return;
+            }
+
             const message = userInput.value.trim();
             if (message === '') return;
-            
-            // If this is the first message in a chat, create a new chat
-            if (!currentChatId || chatHistory.length === 1) {
+
+            isSending = true;
+            submitButton.disabled = true;
+            userInput.disabled = true;
+
+            // Ensure an active chat exists before sending.
+            if (!currentChatId) {
                 currentChatId = generateChatId();
                 // Update the chat title to first message
                 addChatToList(currentChatId, message.substring(0, 20) + (message.length > 20 ? "..." : ""));
             }
-            
+
+            const sendToken = ++activeSendToken;
+            const chatIdAtSend = currentChatId;
+
             addMessage(message, 'user');
             chatHistory.push({ role: 'user', content: message });
             
-            userInput.value = '';
-            typingIndicator.classList.remove('hidden');
+            setTypingIndicator(true);
+            let botMessageElement = null;
+            let botMessageContent = null;
             
             try {
+                botMessageElement = addMessage("", 'bot', { streaming: true });
+                botMessageContent = botMessageElement.querySelector('.message-content');
+
                 // Get AI response
                 const response = await fetch("/chat", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ messages: chatHistory })
                 });
-                
-                const data = await response.json();
-                const botResponse = data.reply;
-                
-                typingIndicator.classList.add('hidden');
-                addMessage(botResponse, 'bot');
+
+                if (!response.ok || !response.body) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || 'Failed to stream response');
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let botResponse = "";
+                let firstChunkReceived = false;
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) {
+                        break;
+                    }
+
+                    const chunk = decoder.decode(value, { stream: true });
+                    if (!chunk) {
+                        continue;
+                    }
+
+                    if (sendToken !== activeSendToken || currentChatId !== chatIdAtSend) {
+                        if (botMessageElement) {
+                            botMessageElement.remove();
+                        }
+                        return;
+                    }
+
+                    botResponse += chunk;
+                    botMessageContent.innerHTML = renderMarkdown(botResponse);
+                    botMessageElement.classList.remove('opacity-0');
+
+                    if (!firstChunkReceived) {
+                        firstChunkReceived = true;
+                        setTypingIndicator(false);
+                    }
+
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+
+                if (!botResponse.trim()) {
+                    throw new Error('Empty response from model');
+                }
+
+                if (!firstChunkReceived) {
+                    setTypingIndicator(false);
+                }
+
                 chatHistory.push({ role: 'assistant', content: botResponse });
+                userInput.value = '';
                 
                 // Save chat history
                 await saveChat(chatHistory, currentChatId);
@@ -429,13 +492,63 @@
                 updateChatTitle(currentChatId, message.substring(0, 20) + (message.length > 20 ? "..." : ""));
             } catch (error) {
                 console.error('Error:', error);
-                typingIndicator.classList.add('hidden');
+                if (sendToken === activeSendToken) {
+                    setTypingIndicator(false);
+                }
+                if (botMessageElement) {
+                    botMessageElement.remove();
+                }
                 addMessage("An error occurred. Please try again.", 'bot');
+            } finally {
+                if (sendToken === activeSendToken) {
+                    isSending = false;
+                    userInput.disabled = false;
+                    submitButton.disabled = false;
+                    userInput.focus();
+                }
             }
         });
+
+        function setTypingIndicator(visible) {
+            typingIndicator.classList.toggle('hidden', !visible);
+        }
+
+        function renderChatMessages(messages) {
+            chatContainer.innerHTML = '';
+            messages.forEach(msg => {
+                addMessage(msg.content, msg.role === 'user' ? 'user' : 'bot');
+            });
+            chatContainer.appendChild(typingIndicator);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function renderMarkdown(text) {
+            const input = String(text || "");
+
+            if (window.marked && window.DOMPurify) {
+                marked.setOptions({ breaks: true, gfm: true });
+                return DOMPurify.sanitize(marked.parse(input));
+            }
+
+            return escapeHtml(input)
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/__(.+?)__/g, '<strong>$1</strong>')
+                .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>')
+                .replace(/_(.+?)_/g, '<em>$1</em>')
+                .replace(/\n/g, '<br>');
+        }
         
         // Add message to chat
-        function addMessage(text, sender) {
+        function addMessage(text, sender, options = {}) {
             const messageDiv = document.createElement('div');
             messageDiv.classList.add('message-enter', 'flex');
             
@@ -443,7 +556,7 @@
                 messageDiv.classList.add('justify-end');
                 messageDiv.innerHTML = `
                     <div class="bg-blue-100 rounded-lg p-3 max-w-xs md:max-w-md">
-                        <p class="text-gray-800">${text}</p>
+                        <p class="text-gray-800 whitespace-pre-wrap">${escapeHtml(text)}</p>
                         <p class="text-xs text-gray-500 mt-1 italic">${getCurrentTime()}</p>
                     </div>
                     <div class="flex-shrink-0 ml-3">
@@ -455,19 +568,23 @@
             } else {
                 messageDiv.innerHTML = `
                     <div class="flex-shrink-0 mr-3">
-                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/CheHigh.jpg/220px-CheHigh.jpg" 
+                        <img src="/static/bot_image.jpg" 
                              alt="Che Bot" 
                              class="w-10 h-10 rounded-full border-2 border-red-600 object-cover">
                     </div>
                     <div class="bg-red-100 rounded-lg p-3 max-w-xs md:max-w-md">
-                        <p class="text-gray-800">${text}</p>
+                        <div class="message-content text-gray-800">${options.streaming ? "" : renderMarkdown(text)}</div>
                         <p class="text-xs text-gray-500 mt-1 italic">${getCurrentTime()}</p>
                     </div>
                 `;
+                if (options.streaming) {
+                    messageDiv.classList.add('opacity-0');
+                }
             }
             
             chatContainer.appendChild(messageDiv);
             chatContainer.scrollTop = chatContainer.scrollHeight;
+            return messageDiv;
         }
         
         // Save chat to backend
@@ -498,7 +615,11 @@
         userInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                chatForm.dispatchEvent(new Event('submit'));
+                if (typeof chatForm.requestSubmit === 'function') {
+                    chatForm.requestSubmit();
+                } else {
+                    chatForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                }
             }
         });
         
@@ -558,26 +679,35 @@
         
         // Load a chat by ID
         async function loadChat(chatId) {
-            currentChatId = chatId;
+            const loadToken = ++activeLoadToken;
+            isLoadingChat = true;
+            submitButton.disabled = true;
+            setTypingIndicator(true);
             
             try {
                 const response = await fetch(`/load_chat/${chatId}`);
                 const data = await response.json();
                 
+                if (loadToken !== activeLoadToken) {
+                    return;
+                }
+
                 if (data.messages) {
+                    currentChatId = chatId;
                     chatHistory = data.messages;
-                    
-                    // Clear chat container
-                    chatContainer.innerHTML = '';
-                    
-                    // Add messages to UI
-                    data.messages.forEach(msg => {
-                        addMessage(msg.content, msg.role === 'user' ? 'user' : 'bot');
-                    });
+                    renderChatMessages(chatHistory);
                 }
             } catch (error) {
                 console.error('Failed to load chat:', error);
-                addMessage("Failed to load chat. Please try again.", 'bot');
+                if (loadToken === activeLoadToken) {
+                    addMessage("Failed to load chat. Please try again.", 'bot');
+                }
+            } finally {
+                if (loadToken === activeLoadToken) {
+                    isLoadingChat = false;
+                    setTypingIndicator(false);
+                    submitButton.disabled = false;
+                }
             }
         }
         
@@ -592,10 +722,7 @@
                     
                     // If this was the current chat, clear the view
                     if (currentChatId === chatId) {
-                        currentChatId = null;
-                        chatHistory = [];
-                        chatContainer.innerHTML = '';
-                        addChatToList(generateChatId(), "New Chat");
+                        startNewChat();
                     }
                     
                     // Show no chats message if empty
@@ -616,7 +743,7 @@
                 const data = await response.json();
                 
                 if (data.profilePic) {
-                    userProfilePic = `/profile/${data.profilePic}`;
+                    userProfilePic = data.profilePic;
                     // Add timestamp to force refresh
                     document.querySelectorAll('.user-avatar').forEach(img => {
                         img.src = `${userProfilePic}?t=${Date.now()}`;
@@ -646,8 +773,7 @@
                     
                     // Load the first chat
                     const firstChat = chats[0];
-                    currentChatId = firstChat.id;
-                    loadChat(firstChat.id);
+                    await loadChat(firstChat.id);
                 } else {
                     // Create a new chat if none exist
                     startNewChat();
